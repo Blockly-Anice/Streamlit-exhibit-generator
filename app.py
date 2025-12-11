@@ -963,7 +963,6 @@ def main():
             box-shadow: none !important;
 
             padding: 6px 12px !important;
-            margin: 0 30px !important;         
 
             font-size: 15px !important;
             font-weight: 500 !important;
