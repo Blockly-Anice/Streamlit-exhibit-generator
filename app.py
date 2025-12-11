@@ -144,6 +144,10 @@ if 'upload_files_page' not in st.session_state:
     st.session_state.upload_files_page = 1
 if "selected_tab" not in st.session_state:
     st.session_state.selected_tab = "📁 Upload Files"
+if 'beneficiary_name' not in st.session_state:
+    st.session_state.beneficiary_name = ""
+if 'petitioner_name' not in st.session_state:
+    st.session_state.petitioner_name = ""
 
 def extract_drive_download_url(drive_url: str) -> str:
     """
@@ -544,7 +548,7 @@ def generate_exhibits_from_urls(
                 status_text.text("✓ Generation complete!")
 
                 st.session_state.exhibits_generated = True
-                st.session_state.active_tab = 2  # Mark to navigate to Results tab
+                st.session_state.selected_tab = "📊 Results"
                 st.session_state.show_results_message = True  # Show navigation message
                 
                 # Show success message with auto-navigation
@@ -749,7 +753,7 @@ def generate_exhibits_from_drive(
                 status_text.text("✓ Generation complete!")
 
                 st.session_state.exhibits_generated = True
-                st.session_state.active_tab = 2  # Mark to navigate to Results tab
+                st.session_state.selected_tab = "📊 Results"
                 st.session_state.show_results_message = True  # Show navigation message
                 
                 # Show success message with auto-navigation
@@ -765,7 +769,6 @@ def generate_exhibits_from_drive(
 
 def main():
     """Main application"""
-
     # Header
     st.markdown('<div class="main-header">📄 Visa Exhibit Generator</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Professional numbered exhibit packages for visa petitions</div>', unsafe_allow_html=True)
@@ -796,6 +799,22 @@ def main():
         }
         numbering_code = numbering_map[numbering_style]
         st.session_state.current_numbering_style = numbering_code
+
+        st.divider()
+
+        st.subheader("Petitioner / Case Information")
+
+        st.session_state.beneficiary_name = st.text_input(
+            "Beneficiary Name (required)",
+            value=st.session_state.beneficiary_name,
+            help="Enter the full name of the primary beneficiary"
+        ).strip()
+
+        st.session_state.petitioner_name = st.text_input(
+            "Petitioner Name (optional - if known)",
+            value=st.session_state.petitioner_name,
+            help="Enter the petitioner name if known (e.g., employer or petitioner of record)"
+        ).strip()
 
         st.divider()
 
@@ -938,19 +957,24 @@ def main():
             st.session_state.selected_tab = "📊 Results"
             st.rerun()
             
-    current_tab = st.radio(
+    radio_placeholder = st.empty()
+
+    current_tab = radio_placeholder.radio(
         "",
         ["📁 Upload Files", "☁️ Google Drive", "📊 Results"],
         index=["📁 Upload Files", "☁️ Google Drive", "📊 Results"].index(
             st.session_state.selected_tab
         ),
-        label_visibility="hidden"
     )
+
+    radio_placeholder.empty()
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown("""
     <style>
-        div.stRadio { 
+        .radio_tabs div[role='radiogroup'] {
             display: none !important;
         }
+                
         div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
             display: flex !important;
             justify-content: center !important;
@@ -1008,8 +1032,9 @@ def main():
 
         upload_method = st.radio(
             "Upload Method",
-            ["Individual PDFs", "ZIP Archive", "URL Links", "Folder"],
-            horizontal=True
+            ["Individual PDFs", "ZIP Archive", "URL Links"],
+            horizontal=True,
+            key="upload_method"
         )
 
         uploaded_files = []
@@ -1134,8 +1159,8 @@ def main():
                     else:
                         st.session_state.url_list = []
         
-        elif upload_method == "Folder":
-            st.info("💡 Tip: Use Google Drive tab for folder processing")
+        # elif upload_method == "Folder":
+        #     st.info("💡 Tip: Use Google Drive tab for folder processing")
 
         # Show uploaded files
         if uploaded_files:
@@ -1153,7 +1178,9 @@ def main():
                     'url_list' in st.session_state and 
                     len(st.session_state.url_list) > 0)
         
-        if uploaded_files or zip_ready or url_ready:
+        beneficiary_ready = bool(st.session_state.beneficiary_name.strip())
+
+        if (uploaded_files or zip_ready or url_ready) and beneficiary_ready:
             st.divider()
             
             if st.button("🚀 Generate Exhibits", type="primary", use_container_width=True):
@@ -1188,6 +1215,9 @@ def main():
                         merge_pdfs,
                         is_zip=is_zip
                     )
+
+        if (uploaded_files or zip_ready or url_ready) and not beneficiary_ready:
+            st.warning("⚠️ Please enter the Beneficiary Name above before generating exhibits.")
 
     # ==========================================
     # TAB 2: GOOGLE DRIVE
@@ -1662,11 +1692,19 @@ def main():
                     
                     with row_col2:
                         title_display = exhibit['title'][:35] + "..." if len(exhibit['title']) > 35 else exhibit['title']
-                        st.write(title_display)
+                        beneficiary = st.session_state.get('beneficiary_name')
+                        year_str = datetime.now().strftime('%Y')
+                        visa_str = visa_type.replace("-", "")
+                        dynamic_filename = f"{title_display}_{beneficiary}_{visa_str}_{year_str}.pdf"
+                        st.write(dynamic_filename)
                     
                     with row_col3:
                         file_display = exhibit['filename'][:30] + "..." if len(exhibit['filename']) > 30 else exhibit['filename']
-                        st.write(file_display)
+                        beneficiary = st.session_state.get('beneficiary_name')
+                        year_str = datetime.now().strftime('%Y')
+                        visa_str = visa_type.replace("-", "")
+                        dynamic_filename = f"{title_display}_{beneficiary}_{visa_str}_{year_str}.pdf"
+                        st.write(dynamic_filename)
                     
                     with row_col4:
                         st.write(exhibit.get('pages', '-'))
@@ -1705,7 +1743,7 @@ def main():
                                 st.rerun()
             else:
                 st.info("No exhibits to display")
-
+                
             # Download button
             st.divider()
             if 'output_file' in st.session_state:
@@ -1715,6 +1753,11 @@ def main():
                         with open(output_file_path, 'rb') as f:
                             file_data = f.read()
                             if file_data:
+                                # Build dynamic file name using beneficiary/petitioner info when available
+                                beneficiary = st.session_state.get('beneficiary_name')
+                                year_str = datetime.now().strftime('%Y')
+                                dynamic_filename = f"{title_display}_{beneficiary}_{visa_type}_{year_str}.pdf"
+
                                 st.download_button(
                                     label="📥 Download Exhibit Package",
                                     data=file_data,
